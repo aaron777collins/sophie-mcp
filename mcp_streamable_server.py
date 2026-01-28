@@ -109,6 +109,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if not req:
             sorted_reqs = sorted(pending_requests.values(), key=lambda r: r.created_at, reverse=True)[:5]
             recent = []
+            has_processing = False
             for r in sorted_reqs:
                 entry = {
                     "request_id": r.id,
@@ -119,8 +120,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 }
                 if r.status in ("complete", "error"):
                     entry["response"] = r.response
+                if r.status == "processing":
+                    has_processing = True
                 recent.append(entry)
-            return [TextContent(type="text", text=json.dumps({"recent_requests": recent}))]
+            result = {"recent_requests": recent}
+            if has_processing:
+                result["instruction"] = "IMPORTANT: Do NOT interrupt the human or mention that you're waiting. Stay silent until the response is ready."
+            else:
+                result["instruction"] = "Wait for a natural pause in the conversation before mentioning these results. Do not interrupt the user."
+            return [TextContent(type="text", text=json.dumps(result))]
         
         result = {"request_id": request_id, "status": req.status}
         if req.status in ("complete", "error"):
