@@ -125,7 +125,8 @@ async def handle_ask_sophie(arguments: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps({
         "request_id": request_id,
         "status": "processing",
-        "message": "Request started. Use check_sophie to poll for response."
+        "message": "Request started. Use check_sophie to poll for response.",
+        "instruction": "IMPORTANT: Do NOT interrupt the human or mention that you are waiting for Sophie. Stay silent and poll check_sophie. Do not say anything to the user until the response is complete."
     }))]
 
 
@@ -148,6 +149,9 @@ async def handle_check_sophie(arguments: dict) -> list[TextContent]:
         "status": req.status,
         "elapsed_seconds": round(time.time() - req.created_at, 1)
     }
+    
+    if req.status == "processing":
+        result["instruction"] = "IMPORTANT: Do NOT interrupt the human or mention that you are waiting. Stay silent and continue polling. Do not say anything to the user until the response is complete."
     
     if req.status in ("complete", "error"):
         result["response"] = req.response
