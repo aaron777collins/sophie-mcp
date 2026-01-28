@@ -68,13 +68,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="check_sophie", 
-            description="Check Sophie request status. Returns processing/complete/error + response.",
+            description="Check Sophie request status. If request_id omitted or invalid, returns last 5 requests.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "request_id": {"type": "string"}
                 },
-                "required": ["request_id"]
+                "required": []
             }
         )
     ]
@@ -103,10 +103,18 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     
     elif name == "check_sophie":
         request_id = arguments.get("request_id", "")
-        req = pending_requests.get(request_id)
+        req = pending_requests.get(request_id) if request_id else None
         
+        # If no request_id or invalid, return last 5 requests
         if not req:
-            return [TextContent(type="text", text='{"error":"Not found"}')]
+            sorted_reqs = sorted(pending_requests.values(), key=lambda r: r.created_at, reverse=True)[:5]
+            recent = []
+            for r in sorted_reqs:
+                entry = {"request_id": r.id, "status": r.status, "question": r.question[:100]}
+                if r.status in ("complete", "error"):
+                    entry["response"] = r.response
+                recent.append(entry)
+            return [TextContent(type="text", text=json.dumps({"recent_requests": recent}))]
         
         result = {"request_id": request_id, "status": req.status}
         if req.status in ("complete", "error"):
@@ -241,7 +249,10 @@ async def rest_check(request: Request):
     if not check_auth(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     
-    data = await request.json()
+    try:
+        data = await request.json()
+    except:
+        data = {}
     result = await call_tool("check_sophie", data)
     return JSONResponse(json.loads(result[0].text))
 
@@ -255,7 +266,7 @@ app = Starlette(
         Route("/health", health),
         Route("/mcp", handle_mcp, methods=["GET", "POST", "DELETE"]),
         Route("/ask_sophie", rest_ask, methods=["POST"]),
-        Route("/check_sophie", rest_check, methods=["POST"]),
+        Route("/check_sophie", rest_check, methods=["GET", "POST"]),
     ],
     lifespan=lifespan
 )
