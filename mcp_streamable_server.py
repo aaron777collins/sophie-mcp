@@ -110,7 +110,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             sorted_reqs = sorted(pending_requests.values(), key=lambda r: r.created_at, reverse=True)[:5]
             recent = []
             for r in sorted_reqs:
-                entry = {"request_id": r.id, "status": r.status, "question": r.question[:100]}
+                entry = {
+                    "request_id": r.id,
+                    "status": r.status,
+                    "question": r.question[:100],
+                    "created_at": r.created_at,
+                    "created_at_iso": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r.created_at))
+                }
                 if r.status in ("complete", "error"):
                     entry["response"] = r.response
                 recent.append(entry)
