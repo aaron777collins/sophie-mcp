@@ -1,0 +1,16 @@
+services:
+  sophie-mcp:
+    build: .
+    container_name: sophie-mcp-server
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - CLAWDBOT_GATEWAY_URL=${CLAWDBOT_GATEWAY_URL:-http://localhost:18789}
+      - CLAWDBOT_GATEWAY_TOKEN=${CLAWDBOT_GATEWAY_TOKEN}
+      - SOPHIE_MCP_SECRET=${SOPHIE_MCP_SECRET}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8014/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
