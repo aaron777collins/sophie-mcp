@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 import httpx
 from dotenv import load_dotenv
@@ -33,6 +33,25 @@ if not MCP_SECRET:
     print("⚠️  Warning: SOPHIE_MCP_SECRET not set - API is UNPROTECTED!")
 
 app = FastAPI(title="Sophie MCP HTTP Server")
+
+
+def check_auth(secret_body: str = None, authorization: str = None) -> bool:
+    """Check auth from body secret OR bearer token header."""
+    if not MCP_SECRET:
+        return True  # No secret = open
+    
+    # Check body secret
+    if secret_body and secrets.compare_digest(secret_body, MCP_SECRET):
+        return True
+    
+    # Check bearer token
+    if authorization:
+        if authorization.lower().startswith("bearer "):
+            token = authorization[7:]
+            if secrets.compare_digest(token, MCP_SECRET):
+                return True
+    
+    return False
 
 
 @dataclass
@@ -53,25 +72,19 @@ requests: Dict[str, Request] = {}
 class AskSophieRequest(BaseModel):
     question: str
     context: str = "Voice request"
-    secret: str
+    secret: str = ""  # Optional if using bearer token
 
 
 class CheckSophieRequest(BaseModel):
     request_id: str
-    secret: str
-
-
-def verify_secret(secret: str) -> bool:
-    if not MCP_SECRET:
-        return True
-    return secrets.compare_digest(secret, MCP_SECRET)
+    secret: str = ""  # Optional if using bearer token
 
 
 @app.post("/ask_sophie")
-async def ask_sophie(req: AskSophieRequest):
+async def ask_sophie(req: AskSophieRequest, authorization: str = Header(None)):
     """Start an async request to Sophie."""
-    if not verify_secret(req.secret):
-        raise HTTPException(status_code=401, detail="Invalid secret")
+    if not check_auth(req.secret, authorization):
+        raise HTTPException(status_code=401, detail="Invalid secret or token")
     
     if not req.question:
         raise HTTPException(status_code=400, detail="Question is required")
@@ -98,10 +111,10 @@ async def ask_sophie(req: AskSophieRequest):
 
 
 @app.post("/check_sophie")
-async def check_sophie(req: CheckSophieRequest):
+async def check_sophie(req: CheckSophieRequest, authorization: str = Header(None)):
     """Check status of a Sophie request."""
-    if not verify_secret(req.secret):
-        raise HTTPException(status_code=401, detail="Invalid secret")
+    if not check_auth(req.secret, authorization):
+        raise HTTPException(status_code=401, detail="Invalid secret or token")
     
     request_obj = requests.get(req.request_id)
     if not request_obj:
